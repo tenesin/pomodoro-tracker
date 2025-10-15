@@ -1,62 +1,28 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { Maximize2, Minimize2 } from "lucide-react";
-import PageContainer from "@/components/PageContainer";
-
-type Mode = "pomodoro" | "short" | "long";
-interface Tab {
-  label: string;
-  key: Mode;
-}
-
-const TABS: Tab[] = [
-  { label: "Pomodoro", key: "pomodoro" },
-  { label: "Short Break", key: "short" },
-  { label: "Long Break", key: "long" },
-];
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 export default function PomodoroPage() {
   const router = useRouter();
-  const supabase = createClientComponentClient();
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
-  const [mode, setMode] = useState<Mode>("pomodoro");
+  const [mode, setMode] = useState<"pomodoro" | "short" | "long">("pomodoro");
   const [sessionCount, setSessionCount] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Auth check
-  useEffect(() => {
-    const checkUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) void router.push("/login");
-      else {
-        setUserId(data.user.id);
-        fetchTodaySessions(data.user.id);
-      }
-    };
-    void checkUser();
-  }, [router, supabase]);
-
-  // Fetch sessions
-  const fetchTodaySessions = async (uid: string) => {
-    const today = new Date().toISOString().split("T")[0];
-    const { data } = await supabase
-      .from("pomodoro_sessions")
-      .select("*")
-      .eq("user_id", uid)
-      .gte("start_time", today);
-    setSessionCount(data?.length || 0);
-  };
-
-  const formatTime = (s: number) =>
-    `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  const autoStartBreak = useCallback(() => {
+    const next = (sessionCount + 1) % 4 === 0 ? "long" : "short";
+    setMode(next);
+    setTimeLeft(next === "long" ? 15 * 60 : 5 * 60);
+    setIsRunning(true);
+  }, [sessionCount]);
 
   const handleSessionComplete = useCallback(async () => {
     if (!userId) return;
+
     if (mode === "pomodoro") {
       await supabase.from("pomodoro_sessions").insert({
         user_id: userId,
@@ -65,147 +31,96 @@ export default function PomodoroPage() {
         duration_min: 25,
         completed: true,
       });
-      setSessionCount((p) => p + 1);
-      alert("Pomodoro completed 🎉 Time for a break!");
+      setSessionCount((prev) => prev + 1);
+      alert("Pomodoro complete! Take a break ☕");
       autoStartBreak();
     } else {
-      alert(mode === "short" ? "Short break over ⏰" : "Long break over ☕");
+      alert(mode === "short" ? "Short break done ⏰" : "Long break done 🌅");
       setMode("pomodoro");
       setTimeLeft(25 * 60);
+      setIsRunning(false);
     }
-    setIsRunning(false);
-  }, [userId, mode, supabase, sessionCount]);
+  }, [mode, userId, autoStartBreak]);
 
   useEffect(() => {
-    if (!isRunning) return;
-    const timer = setInterval(() => {
-      setTimeLeft((t) => {
-        if (t <= 1) {
-          clearInterval(timer);
-          void handleSessionComplete();
-          return 0;
-        }
-        return t - 1;
-      });
+    const interval = setInterval(() => {
+      if (isRunning && timeLeft > 0) setTimeLeft((prev) => prev - 1);
+      if (isRunning && timeLeft === 0) handleSessionComplete();
     }, 1000);
-    return () => clearInterval(timer);
-  }, [isRunning, handleSessionComplete]);
-
-  const setTimerMode = (type: Mode) => {
-    setMode(type);
-    setIsRunning(false);
-    const minutes = type === "pomodoro" ? 25 : type === "short" ? 5 : 15;
-    setTimeLeft(minutes * 60);
-  };
-
-  const autoStartBreak = () => {
-    const next = (sessionCount + 1) % 4 === 0 ? "long" : "short";
-    setTimerMode(next);
-    setIsRunning(true);
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    void router.push("/login");
-  };
-
-  // Fullscreen toggle
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
-    }
-  };
+    return () => clearInterval(interval);
+  }, [isRunning, timeLeft, handleSessionComplete]);
 
   useEffect(() => {
-    const handler = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", handler);
-    return () => document.removeEventListener("fullscreenchange", handler);
-  }, []);
+    const fetchUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (!data.user) router.push("/login");
+      else setUserId(data.user.id);
+    };
+    void fetchUser();
+  }, [router]);
+
+  const formatTime = (t: number) => {
+    const m = Math.floor(t / 60);
+    const s = t % 60;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+  };
 
   return (
-    <PageContainer title="">
-      <div className="flex flex-col items-center text-center relative z-10 max-w-md mx-auto backdrop-blur-lg bg-surface/40 border border-border rounded-3xl p-8 shadow-xl">
-        {/* Tabs */}
-        <div className="flex justify-center gap-4 mb-8">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setTimerMode(tab.key)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                mode === tab.key
-                  ? "bg-foreground text-background shadow-md"
-                  : "text-foreground/70 hover:text-foreground"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+    <ProtectedRoute>
+      <main className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground px-4">
+        <h1 className="text-3xl font-semibold mb-6">Pomodoro Timer 🍅</h1>
 
-        {/* Timer */}
-        <div className="text-[8rem] font-mono font-light mb-8 tracking-tight select-none drop-shadow">
-          {formatTime(timeLeft)}
-        </div>
+        <div className="text-7xl font-mono mb-8">{formatTime(timeLeft)}</div>
 
-        {/* Controls */}
-        <div className="flex items-center justify-center gap-4">
+        <div className="flex gap-4">
           <button
-            onClick={() => setIsRunning((r) => !r)}
-            className="bg-foreground text-background text-lg font-semibold px-8 py-3 rounded-full shadow-md hover:opacity-80 transition-all"
+            onClick={() => setIsRunning(!isRunning)}
+            className="px-6 py-2 rounded-full bg-foreground text-background hover:opacity-80 font-medium transition"
           >
-            {isRunning ? "PAUSE" : "START"}
+            {isRunning ? "Pause" : "Start"}
           </button>
-
-          {/* Fullscreen Button */}
+          <button
+            onClick={() => {
+              setIsRunning(false);
+              setMode("pomodoro");
+              setTimeLeft(25 * 60);
+            }}
+            className="px-6 py-2 rounded-full border border-border hover:bg-surface transition"
+          >
+            Reset
+          </button>
           <button
             onClick={toggleFullscreen}
-            className="p-3 border border-border rounded-full hover:bg-foreground hover:text-background transition-all"
-            aria-label="Toggle Fullscreen"
+            className="px-6 py-2 rounded-full border border-border hover:bg-surface transition"
           >
-            {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+            Fullscreen
           </button>
         </div>
 
-        <p className="mt-6 text-sm opacity-70">
-          Completed Today: <strong>{sessionCount}</strong>
-        </p>
-
-        {/* Spotify */}
-        <div className="mt-8 flex justify-center">
-          <iframe
-            style={{
-              borderRadius: "10px",
-              filter: "grayscale(1) contrast(0.9) brightness(0.95)",
-            }}
-            src="https://open.spotify.com/embed/playlist/2sZYutAwhMODqCaS0mYj4Z?utm_source=generator&theme=0"
-            width="380"
-            height="80"
-            allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"
-            loading="lazy"
-            className="shadow-sm opacity-80 hover:opacity-100 transition"
-          ></iframe>
-        </div>
-
-        <div className="mt-10 flex justify-center gap-4 mx-6">
+        <div className="mt-8 flex gap-3">
           <button
             onClick={() => router.push("/home")}
-            className="flex-1 sm:flex-none px-6 py-2 rounded-full border border-border bg-surface hover:bg-foreground hover:text-background text-sm font-medium shadow-sm hover:shadow-md transition-all"
+            className="px-6 py-2 rounded-full border border-border bg-surface hover:bg-foreground hover:text-background transition font-medium"
           >
             Home
           </button>
-
           <button
             onClick={() => router.push("/tracker")}
-            className="flex-1 sm:flex-none px-6 py-2 rounded-full border border-border bg-foreground text-background hover:opacity-90 text-sm font-medium shadow-sm hover:shadow-md transition-all"
+            className="px-6 py-2 rounded-full border border-border bg-foreground text-background hover:opacity-90 font-medium"
           >
             Tracker
           </button>
         </div>
-      </div>
-    </PageContainer>
+
+        <footer className="mt-10 text-xs text-foreground/50 text-center">
+          © {new Date().getFullYear()} ishaqyudha. All rights reserved.
+        </footer>
+      </main>
+    </ProtectedRoute>
   );
 }

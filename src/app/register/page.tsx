@@ -17,19 +17,19 @@ export default function RegisterPage() {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
 
-    if (!cleanEmail || !cleanEmail.includes("@")) {
+    if (!cleanEmail.includes("@")) {
       alert("⚠️ Please enter a valid email address.");
       setLoading(false);
       return;
     }
+
     if (cleanPassword.length < 6) {
-      alert("⚠️ Password must be at least 6 characters.");
+      alert("⚠️ Password must be at least 6 characters long.");
       setLoading(false);
       return;
     }
 
-    console.log("🟢 Attempting signup:", cleanEmail);
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email: cleanEmail,
       password: cleanPassword,
     });
@@ -37,41 +37,53 @@ export default function RegisterPage() {
     setLoading(false);
 
     if (error) {
-      console.error("❌ Supabase signup error:", error);
+      console.error("❌ Registration error:", error);
       alert(error.message);
-      return;
+    } else {
+      alert("✅ Registration successful! Please verify your email before logging in.");
+      router.push("/login");
     }
-
-    alert("✅ Registration successful! Please verify your email.");
-    router.push("/login");
   };
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground px-4">
       <div className="w-full max-w-sm border border-border rounded-2xl bg-surface/50 shadow-lg p-8">
-        <h1 className="text-2xl font-semibold text-center mb-6">Create Account</h1>
+        <h1 className="text-2xl font-semibold text-center mb-6">Create an Account</h1>
 
         <form onSubmit={handleRegister} className="flex flex-col gap-4">
-          <input
-            type="email"
-            placeholder="Email"
-            className="px-3 py-2 border rounded-lg bg-background"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            className="px-3 py-2 border rounded-lg bg-background"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+          <div>
+            <label className="block text-sm mb-1">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-foreground"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm mb-1">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-foreground"
+              required
+              minLength={6}
+            />
+          </div>
+
           <button
             type="submit"
             disabled={loading}
-            className="mt-2 py-2 bg-foreground text-background rounded-lg hover:opacity-90 transition"
+            className={`mt-4 py-2 rounded-lg font-medium transition-all ${
+              loading
+                ? "bg-border text-foreground/60 cursor-not-allowed"
+                : "bg-foreground text-background hover:opacity-90"
+            }`}
           >
             {loading ? "Creating..." : "Register"}
           </button>
@@ -89,7 +101,7 @@ export default function RegisterPage() {
       </div>
 
       <footer className="mt-8 text-xs text-foreground/50 text-center">
-        © {new Date().getFullYear()} ishaqyudha
+        © {new Date().getFullYear()} ishaqyudha. All rights reserved.
       </footer>
     </main>
   );

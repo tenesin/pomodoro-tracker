@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 
+
 export default function AuthPage() {
-  const supabase = createClientComponentClient();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,7 +18,7 @@ export default function AuthPage() {
       if (data.user) router.push("/home");
     };
     void checkUser();
-  }, [supabase, router]);
+  }, [router]);
 
   const handleAuth = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
