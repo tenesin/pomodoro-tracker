@@ -5,7 +5,6 @@ import { format, getDaysInMonth } from "date-fns";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import PageContainer from "@/components/PageContainer";
 
 interface Task {
   id: string;
@@ -143,168 +142,269 @@ export default function TrackerPage() {
       !taskLogs.some((log) => log.task_id === t.id && log.date === todayStr && log.completed)
   );
 
+  const overallPercent = routineTasks.length
+    ? Math.round(
+        routineTasks.reduce((acc, task) => acc + (progress[task.id]?.percent ?? 0), 0) /
+          routineTasks.length
+      )
+    : 0;
+  const todayCompletion = dailyTasks.length
+    ? Math.round((finishedToday.length / dailyTasks.length) * 100)
+    : 0;
+
   return (
     <ProtectedRoute>
-      <PageContainer title="📊 Task Tracker">
-        <div className="flex flex-col gap-10 w-full max-w-xl mx-auto">
-          <section>
-            <div className="flex justify-between items-center mb-3">
-              <h2 className="text-lg font-semibold">Routine Tasks</h2>
-            </div>
-            <div className="flex gap-2 mb-4">
-              <input
-                value={routineInput}
-                onChange={(e) => setRoutineInput(e.target.value)}
-                placeholder="Add new routine task..."
-                className="flex-1 px-3 py-2 rounded-lg border border-border bg-surface/50 focus:outline-none focus:ring-1 focus:ring-foreground"
-              />
-              <button
-                onClick={() => addTask("routine", routineInput)}
-                className="px-4 py-2 rounded-lg bg-foreground text-background font-medium hover:opacity-80 transition"
-              >
-                Add
-              </button>
-            </div>
-            {routineTasks.length === 0 ? (
-              <p className="text-sm text-foreground/60">No routine tasks yet.</p>
-            ) : (
-              <div className="flex flex-col gap-4">
-                {routineTasks.map((t) => {
-                  const p = progress[t.id]?.percent || 0;
-                  const d = progress[t.id]?.days || 0;
-                  return (
-                    <div
-                      key={t.id}
-                      className="border border-border rounded-2xl p-4 bg-surface/60 shadow-sm hover:shadow-md transition"
-                    >
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="font-semibold">{t.task_name}</span>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => markToday(t)}
-                            className="px-3 py-1 text-sm rounded-full bg-foreground text-background hover:opacity-80"
-                          >
-                            Mark
-                          </button>
-                          <button
-                            onClick={() => deleteTask(t.id)}
-                            className="text-sm px-3 py-1 rounded-full border border-border hover:bg-red-500 hover:text-background transition"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </div>
-                      <div className="w-full h-2 bg-border/40 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-foreground transition-all duration-500"
-                          style={{ width: `${p}%` }}
-                        />
-                      </div>
-                      <p className="mt-2 text-xs text-foreground/70 text-right">
-                        {d} / {totalDays} days ({p}%)
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+    <main className="relative min-h-screen overflow-hidden px-6 py-16">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-24 left-16 h-72 w-72 rounded-full bg-accent-soft blur-3xl" />
+        <div className="absolute bottom-10 right-24 h-80 w-80 rounded-full bg-accent/35 blur-[140px]" />
+        <div className="absolute inset-x-0 top-32 h-px bg-gradient-to-r from-transparent via-accent/30 to-transparent" />
+      </div>
 
-          {/* Daily Section */}
-          <section>
-            <h2 className="text-lg font-semibold mb-3">Daily Tasks</h2>
-            <div className="flex gap-2 mb-4">
-              <input
-                value={dailyInput}
-                onChange={(e) => setDailyInput(e.target.value)}
-                placeholder="Add new daily task..."
-                className="flex-1 px-3 py-2 rounded-lg border border-border bg-surface/50 focus:outline-none focus:ring-1 focus:ring-foreground"
-              />
-              <button
-                onClick={() => addTask("daily", dailyInput)}
-                className="px-4 py-2 rounded-lg bg-foreground text-background font-medium hover:opacity-80 transition"
-              >
-                Add
-              </button>
-            </div>
-            {unfinishedToday.length === 0 ? (
-              <p className="text-sm text-foreground/60">All tasks done for today 🎉</p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {unfinishedToday.map((t) => (
-                  <label
-                    key={t.id}
-                    className="flex items-center justify-between bg-surface/60 border border-border rounded-xl p-3 cursor-pointer hover:bg-surface/80 transition"
-                  >
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={false}
-                        onChange={(e) => toggleDaily(t, e.target.checked)}
-                        className="accent-foreground w-5 h-5"
-                      />
-                      <span>{t.task_name}</span>
-                    </div>
-                    <button
-                      onClick={() => deleteTask(t.id)}
-                      className="text-sm px-2 text-foreground/70 hover:text-red-500"
-                    >
-                      ✕
-                    </button>
-                  </label>
-                ))}
-              </div>
-            )}
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col space-y-12">
+        <header className="flex flex-col gap-6 text-center lg:flex-row lg:items-end lg:justify-between lg:text-left">
+          <div className="space-y-3">
+            <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-surface-soft/60 px-4 py-1 text-xs uppercase tracking-[0.35em] text-muted">
+              Tracker
+            </span>
+            <h1 className="text-4xl font-semibold leading-tight sm:text-5xl">
+              Monthly pulse for <span className="text-accent">{format(today, "MMMM yyyy")}</span>
+            </h1>
+            <p className="text-sm text-muted">
+              View routines at a glance, check off today’s focus list, and keep your long-term streaks
+              alive.
+            </p>
+          </div>
 
-            <div className="mt-8">
-              <h2 className="text-lg font-semibold mb-2">Finished Today</h2>
-              {finishedToday.length === 0 ? (
-                <p className="text-sm text-foreground/60">No tasks finished yet.</p>
+          <div className="grid w-full gap-4 sm:grid-cols-3 lg:w-[520px]">
+            {[
+              { label: "Routine progress", value: `${overallPercent}%` },
+              { label: "Today’s completion", value: `${todayCompletion}%` },
+              { label: "Active routines", value: routineTasks.length },
+            ].map((stat) => (
+              <div
+                key={stat.label}
+                className="rounded-2xl border border-border/60 bg-surface/80 p-4 text-left backdrop-blur"
+              >
+                <p className="text-[0.65rem] uppercase tracking-[0.35em] text-muted">{stat.label}</p>
+                <p className="mt-2 text-xl font-semibold text-foreground">{stat.value}</p>
+              </div>
+            ))}
+          </div>
+        </header>
+
+        <section className="grid gap-10 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="space-y-6">
+            <div className="rounded-3xl border border-border/70 bg-surface/80 p-8 shadow-xl backdrop-blur">
+              <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">Routine momentum</h2>
+                  <p className="text-sm text-muted">
+                    Build consistency for habits you intend to stick with every day of the month.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 rounded-full border border-border/60 bg-background/10 px-4 py-2 text-xs text-muted">
+                  <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+                  Tracking {routineTasks.length} routines
+                </div>
+              </header>
+
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                <input
+                  value={routineInput}
+                  onChange={(e) => setRoutineInput(e.target.value)}
+                  placeholder="Add a new routine…"
+                  className="flex-1 rounded-xl border border-border/60 bg-surface-soft/60 px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface"
+                />
+                <button
+                  onClick={() => addTask("routine", routineInput)}
+                  className="inline-flex items-center justify-center rounded-xl bg-accent px-5 py-3 text-sm font-medium text-background shadow-lg shadow-accent/30 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-accent"
+                >
+                  Add routine
+                </button>
+              </div>
+
+              {routineTasks.length === 0 ? (
+                <p className="mt-8 rounded-2xl border border-dashed border-border/60 bg-background/10 p-6 text-sm text-muted">
+                  No routines yet. Add one to start tracking streaks across the month.
+                </p>
               ) : (
-                <div className="flex flex-col gap-2">
-                  {finishedToday.map((t) => (
-                    <label
-                      key={t.id}
-                      className="flex items-center justify-between bg-foreground text-background rounded-lg px-4 py-2 hover:opacity-90 transition"
-                    >
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked
-                          onChange={(e) => toggleDaily(t, e.target.checked)}
-                          className="accent-background w-5 h-5"
-                        />
-                        <span>{t.task_name}</span>
-                      </div>
-                      <button
-                        onClick={() => deleteTask(t.id)}
-                        className="text-sm px-2 hover:text-red-300"
+                <div className="mt-8 space-y-4">
+                  {routineTasks.map((t) => {
+                    const p = progress[t.id]?.percent ?? 0;
+                    const d = progress[t.id]?.days ?? 0;
+                    return (
+                      <article
+                        key={t.id}
+                        className="rounded-2xl border border-border/60 bg-background/10 p-5 transition hover:-translate-y-0.5 hover:border-accent/40"
                       >
-                        ✕
-                      </button>
-                    </label>
-                  ))}
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <h3 className="text-base font-semibold text-foreground">{t.task_name}</h3>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => markToday(t)}
+                              className="rounded-full bg-accent px-4 py-2 text-xs font-medium text-background shadow-md shadow-accent/30 transition hover:-translate-y-0.5"
+                            >
+                              Mark today
+                            </button>
+                            <button
+                              onClick={() => deleteTask(t.id)}
+                              className="rounded-full border border-border/60 px-4 py-2 text-xs font-medium text-muted transition hover:text-red-400 hover:border-red-400/60"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="w-full rounded-full bg-border/30">
+                            <div
+                              className="h-2 rounded-full bg-accent transition-all duration-500"
+                              style={{ width: `${p}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-muted sm:text-right">
+                            {d} / {totalDays} days · {p}%
+                          </p>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
             </div>
+          </div>
 
-            <div className="mt-10 flex justify-center gap-4 mx-6">
-              <button
-                onClick={() => router.push("/home")}
-                className="flex-1 sm:flex-none px-6 py-2 rounded-full border border-border bg-surface hover:bg-foreground hover:text-background text-sm font-medium shadow-sm hover:shadow-md transition-all"
-              >
-                Home
-              </button>
-              <button
-                onClick={() => router.push("/pomodoro")}
-                className="flex-1 sm:flex-none px-6 py-2 rounded-full border border-border bg-foreground text-background hover:opacity-90 text-sm font-medium shadow-sm hover:shadow-md transition-all"
-              >
-                Pomodoro
-              </button>
+          <div className="space-y-6">
+            <div className="rounded-3xl border border-border/70 bg-surface/80 p-8 shadow-xl backdrop-blur">
+              <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">Today&apos;s focus list</h2>
+                  <p className="text-sm text-muted">
+                    Check off tasks as you complete them to maintain your daily rhythm.
+                  </p>
+                </div>
+                <span className="rounded-full border border-border/60 bg-background/10 px-4 py-2 text-xs text-muted">
+                  {finishedToday.length} of {dailyTasks.length} done
+                </span>
+              </header>
+
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                <input
+                  value={dailyInput}
+                  onChange={(e) => setDailyInput(e.target.value)}
+                  placeholder="Add a daily task…"
+                  className="flex-1 rounded-xl border border-border/60 bg-surface-soft/60 px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface"
+                />
+                <button
+                  onClick={() => addTask("daily", dailyInput)}
+                  className="inline-flex items-center justify-center rounded-xl border border-accent/40 px-5 py-3 text-sm font-medium text-accent transition hover:-translate-y-0.5 hover:border-accent/60"
+                >
+                  Add daily
+                </button>
+              </div>
+
+              <div className="mt-8 space-y-4">
+                {dailyTasks.length === 0 ? (
+                  <p className="rounded-2xl border border-dashed border-border/60 bg-background/10 p-6 text-sm text-muted">
+                    Add your first daily task to plan today&apos;s focus.
+                  </p>
+                ) : (
+                  <>
+                    {unfinishedToday.length > 0 && (
+                      <div className="space-y-3">
+                        <p className="text-xs uppercase tracking-[0.3em] text-muted">In progress</p>
+                        {unfinishedToday.map((t) => (
+                          <label
+                            key={t.id}
+                            className="flex items-center justify-between rounded-2xl border border-border/60 bg-background/10 p-4 transition hover:-translate-y-0.5 hover:border-accent/40"
+                          >
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={false}
+                                onChange={(e) => toggleDaily(t, e.target.checked)}
+                                className="h-5 w-5 rounded border border-border/70 bg-transparent accent-accent"
+                              />
+                              <span className="text-sm text-foreground">{t.task_name}</span>
+                            </div>
+                            <button
+                              onClick={() => deleteTask(t.id)}
+                              className="rounded-full border border-transparent px-3 py-1 text-xs text-muted transition hover:border-red-400/60 hover:text-red-400"
+                            >
+                              Remove
+                            </button>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
+                      <p className="text-xs uppercase tracking-[0.3em] text-muted">Completed today</p>
+                      {finishedToday.length === 0 ? (
+                        <p className="rounded-2xl border border-dashed border-border/60 bg-background/10 p-4 text-xs text-muted">
+                          Nothing checked off yet—one small win unlocks momentum.
+                        </p>
+                      ) : (
+                        finishedToday.map((t) => (
+                          <label
+                            key={t.id}
+                            className="flex items-center justify-between rounded-2xl border border-accent/40 bg-accent/10 p-4 transition hover:-translate-y-0.5"
+                          >
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked
+                                onChange={(e) => toggleDaily(t, e.target.checked)}
+                                className="h-5 w-5 rounded border border-accent/40 bg-transparent accent-accent"
+                              />
+                              <span className="text-sm font-medium text-foreground">{t.task_name}</span>
+                            </div>
+                            <button
+                              onClick={() => deleteTask(t.id)}
+                              className="rounded-full border border-transparent px-3 py-1 text-xs text-accent transition hover:border-red-400/60 hover:text-red-300"
+                            >
+                              Remove
+                            </button>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          </section>
-        </div>
-      </PageContainer>
+
+            <div className="rounded-3xl border border-border/70 bg-surface-soft/70 p-6 text-sm text-muted backdrop-blur">
+              <h3 className="text-base font-semibold text-foreground">Stay consistent</h3>
+              <p className="mt-3 leading-relaxed">
+                Reserve 5 minutes each evening to review your tracker. Mark any routines you completed,
+                queue tomorrow’s daily tasks, and reconnect with your progress before diving into the
+                next day.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  onClick={() => router.push("/home")}
+                  className="rounded-full border border-border/60 bg-background/10 px-4 py-2 text-xs font-medium text-muted transition hover:text-foreground hover:border-border"
+                >
+                  Back to dashboard
+                </button>
+                <button
+                  onClick={() => router.push("/pomodoro")}
+                  className="rounded-full border border-accent/40 px-4 py-2 text-xs font-medium text-accent transition hover:-translate-y-0.5"
+                >
+                  Launch Pomodoro →
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <footer className="pb-10 text-center text-xs text-muted">
+          © {new Date().getFullYear()} ishaqyudha · Keep stacking consistent wins.
+        </footer>
+      </div>
+    </main>
     </ProtectedRoute>
   );
 }
